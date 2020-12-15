@@ -61,12 +61,10 @@ def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss = MaskedSoftmaxCELoss()
     model.train()
+    timer = d2l.Timer()
+    metric = d2l.Accumulator(2)  # Sum of training loss, no. of tokens
     for epoch in range(num_epochs):
-        timer = d2l.Timer()
-        metric = d2l.Accumulator(2)  # Sum of training loss, no. of tokens
         for batch in data_iter:
-            start = time.time()
-
             X, X_valid_len, Y, Y_valid_len = [x.to(device) for x in batch]
             bos = torch.tensor([tgt_vocab['<bos>']] * Y.shape[0],
                                device=device).reshape(-1, 1)
@@ -75,13 +73,12 @@ def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
             l = loss(Y_hat, Y, Y_valid_len)
             l.sum().backward()  # Make the loss scalar for `backward`
             d2l.grad_clipping(model, 1)
-            # num_tokens = Y_valid_len.sum()
+            num_tokens = Y_valid_len.sum()
             optimizer.step()
-            # with torch.no_grad():
-            #     metric.add(l.sum(), num_tokens)
-            print("Time for one batch: %.2f s" % (time.time() - start))
-        print(f'loss {metric[0] / metric[1]:.3f}, {metric[1] / timer.stop():.1f} '
-              f'tokens/sec on {str(device)}')
+            with torch.no_grad():
+                metric.add(l.sum(), num_tokens)
+    print(f'loss {metric[0] / metric[1]:.3f}, {metric[1] / timer.stop():.1f} '
+          f'tokens/sec on {str(device)}')
 
 
 def predict(model, src_sentence, src_vocab, tgt_vocab, num_steps,
