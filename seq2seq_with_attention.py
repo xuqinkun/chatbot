@@ -49,6 +49,7 @@ class Seq2SeqAttentionDecoder(d2l.Decoder):
 
 def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
     print("Training...")
+
     def xavier_init_weights(m):
         if type(m) == nn.Linear:
             torch.nn.init.xavier_uniform_(m.weight)
@@ -56,6 +57,7 @@ def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
             for param in m._flat_weights_names:
                 if "weight" in param:
                     torch.nn.init.xavier_uniform_(m._parameters[param])
+
     model.apply(xavier_init_weights)
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -64,6 +66,7 @@ def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
     timer = d2l.Timer()
     metric = d2l.Accumulator(2)  # Sum of training loss, no. of tokens
     for epoch in range(num_epochs):
+        start = time.time()
         for batch in data_iter:
             X, X_valid_len, Y, Y_valid_len = [x.to(device) for x in batch]
             bos = torch.tensor([tgt_vocab['<bos>']] * Y.shape[0],
@@ -77,6 +80,8 @@ def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
             optimizer.step()
             with torch.no_grad():
                 metric.add(l.sum(), num_tokens)
+        print("Progress:{%.2f}%% Total time: %.2f s" % (round((epoch + 1) * 100 / num_epochs), time.time() - start),
+              end="\r")
     print(f'loss {metric[0] / metric[1]:.3f}, {metric[1] / timer.stop():.1f} '
           f'tokens/sec on {str(device)}')
 
@@ -114,8 +119,8 @@ def predict(model, src_sentence, src_vocab, tgt_vocab, num_steps,
 if __name__ == '__main__':
     embed_size, num_hiddens, num_layers, dropout = 32, 32, 2, 0.1
     batch_size, num_steps = 64, 100
-    data_size = 10000
-    lr, num_epochs, device = 0.005, 250, d2l.try_gpu()
+    data_size = 100
+    lr, num_epochs, device = 0.005, 1, d2l.try_gpu()
 
     train_iter, src_vocab, tgt_vocab = load_data("data/movie_subtitles.txt", data_size, num_steps, batch_size)
     encoder = d2l.Seq2SeqEncoder(
@@ -126,6 +131,6 @@ if __name__ == '__main__':
     train(model, train_iter, lr, num_epochs, tgt_vocab, device)
 
     while True:
-        src_sentence = input()
+        src_sentence = input(">")
         pred = predict(model, src_sentence, src_vocab, tgt_vocab, num_steps, device)
         print(pred)
