@@ -1,12 +1,8 @@
-import os
-from model import TransformerEncoder
-from model import MaskedSoftmaxCELoss
-from model import TransformerDecoder
-import torch
 import argparse
-from d2l import torch as d2l
-from torch import nn
+import os
+
 from load import *
+from model import *
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -48,7 +44,7 @@ class Seq2SeqAttentionDecoder(d2l.Decoder):
                                           enc_valid_len]
 
 
-def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
+def train(model, data_iter, lr, num_epochs, tgt_vocab, device, loadFilename=None):
     print("Training...")
 
     def xavier_init_weights(m):
@@ -66,8 +62,15 @@ def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
     model.train()
     timer = d2l.Timer()
     metric = d2l.Accumulator(2)  # Sum of training loss, no. of tokens
-    for epoch in range(num_epochs):
-        start = time.time()
+    start_epoch = 0
+    if loadFilename:
+        checkpoint = torch.load(loadFilename)
+        start_epoch = checkpoint['epoch']
+        model.encoder.load_state_dict(checkpoint['en'])
+        model.decoder.load_state_dict(checkpoint['de'])
+        optimizer.load_state_dict(checkpoint['opt'])
+    start = time.time()
+    for epoch in range(start_epoch, num_epochs, 1):
         for batch in data_iter:
             X, X_valid_len, Y, Y_valid_len = [x.to(device) for x in batch]
             bos = torch.tensor([tgt_vocab['<bos>']] * Y.shape[0],
@@ -83,6 +86,14 @@ def train(model, data_iter, lr, num_epochs, tgt_vocab, device):
                 metric.add(l.sum(), num_tokens)
         print("Progress:{%.2f}%% Total time: %.2f s" % (round((epoch + 1) * 100 / num_epochs), time.time() - start),
               end="\r")
+        torch.save({
+            'model': model,
+            'iteration': epoch + 1,
+            'en': model.encoder.state_dict(),
+            'de': model.decoder.state_dict(),
+            'opt': optimizer.state_dict(),
+            'loss': loss,
+        }, os.path.join("data", '{}_{}.tar'.format(epoch, 'backup_model')))
     print(f'loss {metric[0] / metric[1]:.3f}, {metric[1] / timer.stop():.1f} '
           f'tokens/sec on {str(device)}')
 
@@ -119,23 +130,9 @@ def predict(model, src_sentence, src_vocab, tgt_vocab, num_steps,
 
 def parse():
     parser = argparse.ArgumentParser(description='Attention Seq2Seq Chatbot')
-    # parser.add_argument('-tr', '--train', help='Train the model with corpus')
-    # parser.add_argument('-te', '--test', help='Test the saved model')
-    # parser.add_argument('-l', '--load', help='Load the model and train')
-    # parser.add_argument('-c', '--corpus', help='Test the saved model with vocabulary of the corpus')
-    # parser.add_argument('-r', '--reverse', action='store_true', help='Reverse the input sequence')
-    # parser.add_argument('-f', '--filter', action='store_true', help='Filter to small training data set')
-    # parser.add_argument('-i', '--input', action='store_true', help='Test the model by input the sentence')
+    parser.add_argument('-mb', '--model_bak', help='Load the model and train')
     parser.add_argument('-it', '--iteration', type=int, default=10000, help='Train the model with it iterations')
-    # parser.add_argument('-p', '--print', type=int, default=100, help='Print every p iterations')
-    # parser.add_argument('-b', '--batch_size', type=int, default=64, help='Batch size')
-    # parser.add_argument('-la', '--layer', type=int, default=1, help='Number of layers in encoder and decoder')
-    # parser.add_argument('-hi', '--hidden', type=int, default=256, help='Hidden size in encoder and decoder')
-    # parser.add_argument('-be', '--beam', type=int, default=1, help='Hidden size in encoder and decoder')
-    # parser.add_argument('-s', '--save', type=int, default=500, help='Save every s iterations')
-    # parser.add_argument('-lr', '--learning_rate', type=float, default=0.01, help='Learning rate')
-    # parser.add_argument('-d', '--dropout', type=float, default=0.1, help='Dropout probability for rnn and dropout layers')
-
+    parser.add_argument('-ne', '--num_epoch', type=int, default=100, help='Train the model with n epochs')
     args = parser.parse_args()
     return args
 
@@ -143,18 +140,19 @@ def parse():
 if __name__ == '__main__':
     args = parse()
 
+    model_bak_file = args.model_bak
+
     embed_size, num_hiddens, num_layers, dropout = 32, 32, 2, 0.1
     batch_size, num_steps = 64, 100
     data_size = args.iteration
     lr, num_epochs, device = 0.005, 1, d2l.try_gpu()
 
     train_iter, src_vocab, tgt_vocab = load_data("data/movie_subtitles.txt", data_size, num_steps, batch_size)
-    encoder = d2l.Seq2SeqEncoder(
-        len(src_vocab), embed_size, num_hiddens, num_layers, dropout)
+    encoder = Seq2SeqEncoder(len(src_vocab), embed_size, num_hiddens, num_layers, dropout)
     decoder = Seq2SeqAttentionDecoder(
         len(tgt_vocab), embed_size, num_hiddens, num_layers, dropout)
     model = d2l.EncoderDecoder(encoder, decoder)
-    train(model, train_iter, lr, num_epochs, tgt_vocab, device)
+    train(model, train_iter, lr, num_epochs, tgt_vocab, device, model_bak_file)
 
     while True:
         src_sentence = input(">")
