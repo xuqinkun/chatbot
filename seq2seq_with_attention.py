@@ -117,9 +117,10 @@ def predict(model, src_sentence, src_vocab, tgt_vocab, num_steps,
 if __name__ == '__main__':
     embed_size, num_hiddens, num_layers, dropout = 32, 32, 2, 0.1
     batch_size, num_steps = 64, 100
+    data_size = 10000
     lr, num_epochs, device = 0.005, 250, d2l.try_gpu()
 
-    train_iter, src_vocab, tgt_vocab = load_data("data/movie_subtitles.txt", num_steps, batch_size)
+    train_iter, src_vocab, tgt_vocab = load_data("data/movie_subtitles.txt", data_size, num_steps, batch_size)
     encoder = d2l.Seq2SeqEncoder(
         len(src_vocab), embed_size, num_hiddens, num_layers, dropout)
     decoder = Seq2SeqAttentionDecoder(

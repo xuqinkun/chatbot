@@ -2,6 +2,8 @@ import torch
 import collections
 from torch.utils import data
 import time
+import random
+
 
 class Vocab:
     """Vocabulary for text."""
@@ -100,18 +102,23 @@ def load_array(data_arrays, batch_size, is_train=True):
     return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
 
-def load_data(corpus, num_steps, batch_size):
+def load_data(corpus, data_size, num_steps, batch_size):
     start = time.time()
-
     corpus_processed = corpus.replace("txt", "tar")
     try:
         with open(corpus_processed, "r") as f:
-            text = f.readlines()
+            lines = f.readlines()
+            select_list = [i for i in range(len(lines))]
+            random.shuffle(select_list)
+            select_list = select_list[0:data_size]
+            text = [lines[i] for i in select_list]
             text = "\n".join(text)
     except Exception:
         text = preprocess_nmt(read_text(corpus))
         with open(corpus_processed, "w") as f:
             f.write(text)
+
+
     source, target = tokenize_nmt(text)
 
     src_vocab = Vocab(source, min_freq=2, reserved_tokens=['<pad>', '<bos>', '<eos>'])
@@ -126,8 +133,6 @@ def load_data(corpus, num_steps, batch_size):
 
 
 def preprocess_nmt(text):
-    """Preprocess the English-French dataset."""
-
     def no_space(char, prev_char):
         return char in set(',.!?') and prev_char != ' '
 
