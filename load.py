@@ -1,8 +1,10 @@
-import torch
 import collections
-from torch.utils import data
-import time
+import os
 import random
+import time
+
+import torch
+from torch.utils import data
 
 
 class Vocab:
@@ -91,6 +93,8 @@ def build_array(lines, vocab, num_steps):
         l, num_steps, vocab['<pad>']) for l in lines])
     valid_len = []
     for line in lines:
+        if len(line) > num_steps:
+            print("Large sentence: %d" % len(line))
         valid_len.append(len(line))
     valid_len = torch.tensor(valid_len, dtype=torch.int32)
     return array, valid_len
@@ -102,34 +106,50 @@ def load_array(data_arrays, batch_size, is_train=True):
     return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
 
-def load_data(corpus, data_size, num_steps, batch_size):
-    start = time.time()
-    corpus_processed = corpus.replace("txt", "tar")
-    try:
-        with open(corpus_processed, "r") as f:
-            lines = f.readlines()
-            select_list = [i for i in range(len(lines))]
-            random.shuffle(select_list)
-            select_list = select_list[0:data_size]
-            text = [lines[i] for i in select_list]
-            text = "\n".join(text)
-    except Exception:
-        text = preprocess_nmt(read_text(corpus))
-        with open(corpus_processed, "w") as f:
-            f.write(text)
+def read_data(corpus, data_size, num_steps, batch_size):
+    text = preprocess_nmt(read_text(corpus))
 
+    vocab = Vocab(text.split(" "), min_freq=2, reserved_tokens=['<pad>', '<bos>', '<eos>'])
 
     source, target = tokenize_nmt(text)
+    source, target = random_select(data_size, source, target)
+    src_array, src_valid_len = build_array(source, vocab, num_steps)
+    tgt_array, tgt_valid_len = build_array(target, vocab, num_steps)
 
-    src_vocab = Vocab(source, min_freq=2, reserved_tokens=['<pad>', '<bos>', '<eos>'])
-    tgt_vocab = Vocab(target, min_freq=2, reserved_tokens=['<pad>', '<bos>', '<eos>'])
-    src_array, src_valid_len = build_array(source, src_vocab, num_steps)
-    tgt_array, tgt_valid_len = build_array(target, tgt_vocab, num_steps)
     data_arrays = (src_array, src_valid_len, tgt_array, tgt_valid_len)
     data_iter = load_array(data_arrays, batch_size)
+    return data_iter, vocab
+
+
+def random_select(data_size, source, target):
+    select_list = [i for i in range(data_size)]
+    random.shuffle(select_list)
+    source = [source[i] for i in select_list]
+    target = [target[i] for i in select_list]
+    return source, target
+
+
+def load_data(corpus_file, data_size, num_steps, batch_size):
+    start = time.time()
+    root_dir = corpus_file.split(os.sep)[0]
+    corpus_save_dir = os.path.join(root_dir, str(data_size), str(num_steps), str(batch_size))
+    vocab_save_file = os.path.join(root_dir, "vocab.tar")
+    data_save_file = os.path.join(corpus_save_dir, "data.tar")
+    try:
+        vocab = torch.load(vocab_save_file)
+        data_iter = torch.load(data_save_file)
+        # src_valid_len = torch.load(corpus_processed)["src_valid_len"]
+        # tgt_array = torch.load(corpus_processed)["tgt_array"]
+        # tgt_valid_len = torch.load(corpus_processed)["tgt_valid_len"]
+    except FileNotFoundError:
+        data_iter, vocab = read_data(corpus_file, data_size, num_steps, batch_size)
+        if not os.path.exists(corpus_save_dir):
+            os.makedirs(corpus_save_dir)
+        torch.save(vocab, vocab_save_file)
+        torch.save(data_iter, data_save_file)
 
     print("Load data: %.2f s" % (time.time() - start))
-    return data_iter, src_vocab, tgt_vocab
+    return data_iter, vocab
 
 
 def preprocess_nmt(text):
