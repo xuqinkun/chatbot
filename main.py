@@ -88,7 +88,6 @@ def train(model, training_batches, lr, num_epochs, vocab, device, model_save_dir
         optimizer.step()
         print("Progress:{%.2f}%% Total time: %.2f s" % (round((epoch + 1) * 100 / len(training_batches)), time.time() - start),
               end="\r")
-        print(model)
 
         if not os.path.exists(model_save_dir):
             os.makedirs(model_save_dir)
@@ -99,6 +98,7 @@ def train(model, training_batches, lr, num_epochs, vocab, device, model_save_dir
             'opt': optimizer.state_dict(),
             'loss': loss,
         }, os.path.join(model_save_dir, '{}_{}.tar'.format(epoch + 1, MODEL_FILE_NAME)))
+    print(model)
 
 
 def predict(model, src_sentence, vocab, num_steps,
