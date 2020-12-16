@@ -48,7 +48,7 @@ class Seq2SeqAttentionDecoder(d2l.Decoder):
                                           enc_valid_len]
 
 
-def train(model, data_iter, lr, num_epochs, vocab, device, model_save_dir, model_save_file=None):
+def train(model, training_batches, lr, num_epochs, vocab, device, model_save_dir, model_save_file=None):
     print("Training...")
 
     def xavier_init_weights(m):
@@ -64,8 +64,6 @@ def train(model, data_iter, lr, num_epochs, vocab, device, model_save_dir, model
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     loss = MaskedSoftmaxCELoss()
 
-    timer = d2l.Timer()
-    metric = d2l.Accumulator(2)  # Sum of training loss, no. of tokens
     start_epoch = 0
 
     if model_save_file and os.path.exists(model_save_file):
@@ -77,21 +75,18 @@ def train(model, data_iter, lr, num_epochs, vocab, device, model_save_dir, model
     model.train()
     model.to(device)
     start = time.time()
-    for epoch in range(start_epoch, num_epochs, 1):
-        for batch in data_iter:
-            X, X_valid_len, Y, Y_valid_len = [x.to(device) for x in batch]
-            bos = torch.tensor([vocab['<bos>']] * Y.shape[0],
-                               device=device).reshape(-1, 1)
-            dec_input = d2l.concat([bos, Y[:, :-1]], 1)  # Teacher forcing
-            Y_hat, _ = model(X, dec_input, X_valid_len)
-            l = loss(Y_hat, Y, Y_valid_len)
-            l.sum().backward()  # Make the loss scalar for `backward`
-            d2l.grad_clipping(model, 1)
-            num_tokens = Y_valid_len.sum()
-            optimizer.step()
-            with torch.no_grad():
-                metric.add(l.sum(), num_tokens)
-        print("Progress:{%.2f}%% Total time: %.2f s" % (round((epoch + 1) * 100 / num_epochs), time.time() - start),
+    for epoch in range(start_epoch, len(training_batches), 1):
+        batch = training_batches[epoch]
+        X, X_valid_len, Y, Y_valid_len = [x.to(device) for x in batch]
+        bos = torch.tensor([vocab['<bos>']] * Y.shape[0],
+                           device=device).reshape(-1, 1)
+        dec_input = d2l.concat([bos, Y[:, :-1]], 1)  # Teacher forcing
+        Y_hat, _ = model(X, dec_input, X_valid_len)
+        l = loss(Y_hat, Y, Y_valid_len)
+        l.sum().backward()  # Make the loss scalar for `backward`
+        d2l.grad_clipping(model, 1)
+        optimizer.step()
+        print("Progress:{%.2f}%% Total time: %.2f s" % (round((epoch + 1) * 100 / len(training_batches)), time.time() - start),
               end="\r")
         print(model)
 
@@ -104,9 +99,6 @@ def train(model, data_iter, lr, num_epochs, vocab, device, model_save_dir, model
             'opt': optimizer.state_dict(),
             'loss': loss,
         }, os.path.join(model_save_dir, '{}_{}.tar'.format(epoch + 1, MODEL_FILE_NAME)))
-
-    print(f'loss {metric[0] / metric[1]:.3f}, {metric[1] / timer.stop():.1f} '
-          f'tokens/sec on {str(device)}')
 
 
 def predict(model, src_sentence, vocab, num_steps,
@@ -155,11 +147,11 @@ if __name__ == '__main__':
 
     embed_size, num_hiddens, num_layers, dropout = 32, 32, 2, 0.1
 
-    batch_size, num_steps = 64, 200
-    data_size = args.iteration
+    batch_size, num_steps = 64, 30
+    training_iteration = args.iteration
     lr, num_epochs, device = 0.005, args.num_epoch, d2l.try_gpu()
 
-    train_iter, vocab = load_data("data/movie_subtitles.txt", data_size, num_steps, batch_size)
+    training_batches, vocab = load_data("data/movie_subtitles.txt", training_iteration, num_steps, batch_size)
     encoder = Seq2SeqEncoder(len(vocab), embed_size, num_hiddens, num_layers, dropout)
     decoder = Seq2SeqAttentionDecoder(
         len(vocab), embed_size, num_hiddens, num_layers, dropout)
@@ -167,7 +159,7 @@ if __name__ == '__main__':
 
     if model_save_path is None:
         model_save_path = DEFAULT_DATA_PATH
-    model_save_dir = os.path.join(model_save_path, str(num_layers), str(num_hiddens))
+    model_save_dir = os.path.join(model_save_path, str(training_iteration), str(num_layers), str(num_hiddens))
 
     latest_training_model = None
     if os.path.exists(model_save_dir):
@@ -176,7 +168,7 @@ if __name__ == '__main__':
         max_num = sorted(numbers)[-1]
         latest_training_model = os.path.join(model_save_dir, "{}_{}.tar".format(max_num, MODEL_FILE_NAME))
 
-    train(model, train_iter, lr, num_epochs, vocab, device, model_save_dir, latest_training_model)
+    train(model, training_batches, lr, num_epochs, vocab, device, model_save_dir, latest_training_model)
 
     while True:
         src_sentence = input(">")

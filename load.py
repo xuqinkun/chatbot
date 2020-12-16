@@ -4,7 +4,6 @@ import random
 import time
 
 import torch
-from torch.utils import data
 
 
 class Vocab:
@@ -68,6 +67,7 @@ def read_text(corpus):
 
 def tokenize_nmt(text, num_examples=None):
     source, target = [], []
+    max_len = 0
     for i, line in enumerate(text.split('\n')):
         if num_examples and i > num_examples:
             break
@@ -75,7 +75,8 @@ def tokenize_nmt(text, num_examples=None):
         if len(parts) == 2:
             source.append(parts[0].split(' '))
             target.append(parts[1].split(' '))
-    return source, target
+        max_len = max(len(parts[0]), len(parts[1]), max_len)
+    return source, target, max_len
 
 
 def truncate_pad(line, num_steps, padding_token):
@@ -87,69 +88,68 @@ def truncate_pad(line, num_steps, padding_token):
 
 def build_array(lines, vocab, num_steps):
     """Transform text sequences of machine translation into minibatches."""
-    lines = [vocab[l] for l in lines]
-    lines = [l + [vocab['<eos>']] for l in lines]
-    array = torch.tensor([truncate_pad(
-        l, num_steps, vocab['<pad>']) for l in lines])
+    lines = [[vocab[l] for l in batch] for batch in lines]
+    for batch in lines:
+        for line in batch:
+            line.append(vocab['<eos>'])
+    array = torch.tensor([[truncate_pad(
+        l, num_steps, vocab['<pad>']) for l in batch] for batch in lines])
     valid_len = []
-    for line in lines:
-        if len(line) > num_steps:
-            print("Large sentence: %d" % len(line))
-        valid_len.append(len(line))
+    for batch in lines:
+        temp = []
+        for line in batch:
+            temp.append(len(line))
+        valid_len.append(temp)
     valid_len = torch.tensor(valid_len, dtype=torch.int32)
     return array, valid_len
 
 
-def load_array(data_arrays, batch_size, is_train=True):
-    """Construct a PyTorch data iterator."""
-    dataset = data.TensorDataset(*data_arrays)
-    return data.DataLoader(dataset, batch_size, shuffle=is_train)
-
-
-def read_data(corpus, data_size, num_steps, batch_size):
+def read_data(corpus, training_iteration, num_steps, batch_size):
     text = preprocess_nmt(read_text(corpus))
 
     vocab = Vocab(text.split(" "), min_freq=2, reserved_tokens=['<pad>', '<bos>', '<eos>'])
 
-    source, target = tokenize_nmt(text)
-    source, target = random_select(data_size, source, target)
+    source, target, max_len = tokenize_nmt(text)
+    pairs = [random_select(batch_size, source, target)
+             for _ in range(training_iteration)]
+    source = [pair[0] for pair in pairs]
+    target = [pair[1] for pair in pairs]
+
     src_array, src_valid_len = build_array(source, vocab, num_steps)
     tgt_array, tgt_valid_len = build_array(target, vocab, num_steps)
 
-    data_arrays = (src_array, src_valid_len, tgt_array, tgt_valid_len)
-    data_iter = load_array(data_arrays, batch_size)
-    return data_iter, vocab
+    data_batches = []
+    for i in range(len(src_array)):
+        data_batches.append((src_array[i], src_valid_len[i], tgt_array[i], tgt_valid_len[i]))
+    return data_batches, vocab
 
 
-def random_select(data_size, source, target):
-    select_list = [i for i in range(data_size)]
+def random_select(batch_size, source, target):
+    select_list = [i for i in range(batch_size)]
     random.shuffle(select_list)
     source = [source[i] for i in select_list]
     target = [target[i] for i in select_list]
     return source, target
 
 
-def load_data(corpus_file, data_size, num_steps, batch_size):
+def load_data(corpus_file, training_iteration, num_steps, batch_size):
     start = time.time()
     root_dir = corpus_file.split(os.sep)[0]
-    corpus_save_dir = os.path.join(root_dir, str(data_size), str(num_steps), str(batch_size))
+    corpus_save_dir = os.path.join(root_dir, str(training_iteration), str(num_steps), str(batch_size))
     vocab_save_file = os.path.join(root_dir, "vocab.tar")
     data_save_file = os.path.join(corpus_save_dir, "data.tar")
     try:
         vocab = torch.load(vocab_save_file)
-        data_iter = torch.load(data_save_file)
-        # src_valid_len = torch.load(corpus_processed)["src_valid_len"]
-        # tgt_array = torch.load(corpus_processed)["tgt_array"]
-        # tgt_valid_len = torch.load(corpus_processed)["tgt_valid_len"]
+        data_batches = torch.load(data_save_file)
     except FileNotFoundError:
-        data_iter, vocab = read_data(corpus_file, data_size, num_steps, batch_size)
+        data_batches, vocab = read_data(corpus_file, training_iteration, num_steps, batch_size)
         if not os.path.exists(corpus_save_dir):
             os.makedirs(corpus_save_dir)
         torch.save(vocab, vocab_save_file)
-        torch.save(data_iter, data_save_file)
+        torch.save(data_batches, data_save_file)
 
     print("Load data: %.2f s" % (time.time() - start))
-    return data_iter, vocab
+    return data_batches, vocab
 
 
 def preprocess_nmt(text):
