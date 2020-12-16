@@ -1,5 +1,4 @@
 import argparse
-import os
 
 from load import *
 from model import *
@@ -75,6 +74,10 @@ def train(model, training_batches, lr, num_epochs, vocab, device, model_save_dir
     model.train()
     model.to(device)
     start = time.time()
+
+    if not os.path.exists(model_save_dir):
+        os.makedirs(model_save_dir)
+
     for epoch in range(start_epoch, len(training_batches), 1):
         batch = training_batches[epoch]
         X, X_valid_len, Y, Y_valid_len = [x.to(device) for x in batch]
@@ -88,16 +91,14 @@ def train(model, training_batches, lr, num_epochs, vocab, device, model_save_dir
         optimizer.step()
         print("Progress:{%.2f}%% Total time: %.2f s" % (round((epoch + 1) * 100 / len(training_batches)), time.time() - start),
               end="\r")
-
-        if not os.path.exists(model_save_dir):
-            os.makedirs(model_save_dir)
-        torch.save({
-            'epoch': epoch + 1,
-            'en': model.encoder.state_dict(),
-            'de': model.decoder.state_dict(),
-            'opt': optimizer.state_dict(),
-            'loss': loss,
-        }, os.path.join(model_save_dir, '{}_{}.tar'.format(epoch + 1, MODEL_FILE_NAME)))
+        if (epoch + 1) % 100 == 0:
+            torch.save({
+                'epoch': epoch + 1,
+                'en': model.encoder.state_dict(),
+                'de': model.decoder.state_dict(),
+                'opt': optimizer.state_dict(),
+                'loss': loss,
+            }, os.path.join(model_save_dir, '{}_{}.tar'.format(epoch + 1, MODEL_FILE_NAME)))
     print(model)
 
 
