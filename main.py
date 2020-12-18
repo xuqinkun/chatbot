@@ -13,7 +13,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 def parse():
     parser = argparse.ArgumentParser(description='Attention Seq2Seq Chatbot')
     parser.add_argument('-mb', '--model_path', help='Load the model and train')
-    parser.add_argument('-c', '--corpus', help='Load the corpus file')
+    parser.add_argument('-c', '--corpus', required=True, help='Load the corpus file')
     parser.add_argument('-it', '--iteration', type=int, default=10000, help='Train the model with it iterations')
     parser.add_argument('-ne', '--num_epoch', type=int, default=100, help='Train the model with n epochs')
     args = parser.parse_args()
