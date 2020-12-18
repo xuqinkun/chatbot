@@ -2,6 +2,9 @@ from d2l import torch as d2l
 from torch import nn
 
 from load import *
+from model import MaskedSoftmaxCELoss
+
+MODEL_FILE_NAME = "model_backup"
 
 
 def try_gpu(i=0):
@@ -25,7 +28,7 @@ def train(model, training_batches, lr, vocab, device, model_save_dir, model_save
     model.apply(xavier_init_weights)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    loss = nn.CrossEntropyLoss()
+    loss = MaskedSoftmaxCELoss()
 
     start_epoch = 0
 
