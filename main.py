@@ -23,6 +23,7 @@ def parse():
 if __name__ == '__main__':
     args = parse()
     model_save_path = args.model_path
+    corpus_file = args.corpus
 
     embed_size, num_hiddens, num_layers, dropout = 32, 32, 2, 0.1
 
@@ -30,7 +31,7 @@ if __name__ == '__main__':
     training_iteration = args.iteration
     lr, num_epochs, device = 0.005, args.num_epoch, d2l.try_gpu()
 
-    training_batches, vocab = load_data("data/movie_subtitles.txt", training_iteration, num_steps, batch_size)
+    training_batches, vocab = load_data(corpus_file, training_iteration, num_steps, batch_size)
     encoder = Seq2SeqEncoder(len(vocab), embed_size, num_hiddens, num_layers, dropout)
     decoder = Seq2SeqAttentionDecoder(
         len(vocab), embed_size, num_hiddens, num_layers, dropout)

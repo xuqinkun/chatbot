@@ -3,30 +3,6 @@ from d2l import torch as d2l
 from torch import nn
 
 
-def transpose_qkv(X, num_heads):
-    # Input `X` shape: (`batch_size`, `seq_len`, `num_hiddens`).
-    # Output `X` shape:
-    # (`batch_size`, `seq_len`, `num_heads`, `num_hiddens` / `num_heads`)
-    X = X.reshape(X.shape[0], X.shape[1], num_heads, -1)
-
-    # `X` shape:
-    # (`batch_size`, `num_heads`, `seq_len`, `num_hiddens` / `num_heads`)
-    X = X.permute(0, 2, 1, 3)
-
-    # `output` shape:
-    # (`batch_size` * `num_heads`, `seq_len`, `num_hiddens` / `num_heads`)
-    output = X.reshape(-1, X.shape[2], X.shape[3])
-    return output
-
-
-# @save
-def transpose_output(X, num_heads):
-    # A reversed version of `transpose_qkv`
-    X = X.reshape(-1, num_heads, X.shape[1], X.shape[2])
-    X = X.permute(0, 2, 1, 3)
-    return X.reshape(X.shape[0], X.shape[1], -1)
-
-
 class Seq2SeqEncoder(nn.Module):
 
     def __init__(self, vocab_size, embed_size, num_hiddens, num_layers,
