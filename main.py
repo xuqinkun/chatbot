@@ -5,8 +5,6 @@ from train import *
 
 DEFAULT_DATA_PATH = "data"
 
-MODEL_FILE_NAME = 'epoch_model'
-
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
