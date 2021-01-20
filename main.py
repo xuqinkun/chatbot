@@ -1,21 +1,8 @@
-import argparse
-
 from model import *
 from train import *
-
-DEFAULT_DATA_PATH = "data"
+from utils import *
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
-
-def parse():
-    parser = argparse.ArgumentParser(description='Attention Seq2Seq Chatbot')
-    parser.add_argument('-mb', '--model_path', help='Load the model and train')
-    parser.add_argument('-c', '--corpus', required=True, help='Load the corpus file')
-    parser.add_argument('-it', '--iteration', type=int, default=10000, help='Train the model with it iterations')
-    parser.add_argument('-ne', '--num_epoch', type=int, default=100, help='Train the model with n epochs')
-    args = parser.parse_args()
-    return args
 
 
 if __name__ == '__main__':
@@ -49,8 +36,3 @@ if __name__ == '__main__':
 
     train(model, training_batches, lr, vocab, device, model_save_dir, latest_training_model)
 
-    src_sentence = None
-    while src_sentence != "q":
-        src_sentence = input(">")
-        pred = predict(model, src_sentence, vocab, num_steps, device)
-        print(pred)

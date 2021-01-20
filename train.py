@@ -3,15 +3,7 @@ from torch import nn
 
 from load import *
 from model import MaskedSoftmaxCELoss
-
-MODEL_FILE_NAME = "model_backup"
-
-
-def try_gpu(i=0):
-    """Return gpu(i) if exists, otherwise return cpu()."""
-    if torch.cuda.device_count() >= i + 1:
-        return torch.device(f'cuda:{i}')
-    return torch.device('cpu')
+from utils import *
 
 
 def train(model, training_batches, lr, vocab, device, model_save_dir, model_save_file=None):
@@ -68,33 +60,3 @@ def train(model, training_batches, lr, vocab, device, model_save_dir, model_save
                 'loss': loss,
             }, os.path.join(model_save_dir, '{}_{}.tar'.format(epoch + 1, MODEL_FILE_NAME)))
     print(model)
-
-
-def predict(model, src_sentence, vocab, num_steps,
-            device):
-    """Predict sequences."""
-    src_tokens = vocab[src_sentence.lower().split(' ')] + [
-        vocab['<eos>']]
-    enc_valid_len = torch.tensor([len(src_tokens)], device=device)
-    src_tokens = d2l.truncate_pad(src_tokens, num_steps, vocab['<pad>'])
-    # Add the batch axis
-    enc_X = torch.unsqueeze(
-        torch.tensor(src_tokens, dtype=torch.long, device=device), dim=0)
-    enc_outputs = model.encoder(enc_X, enc_valid_len)
-    dec_state = model.decoder.init_state(enc_outputs, enc_valid_len)
-    # Add the batch axis
-    dec_X = torch.unsqueeze(torch.tensor(
-        [vocab['<bos>']], dtype=torch.long, device=device), dim=0)
-    output_seq = []
-    for _ in range(num_steps):
-        Y, dec_state = model.decoder(dec_X, dec_state)
-        # We use the token with the highest prediction likelihood as the input
-        # of the decoder at the next time step
-        dec_X = Y.argmax(dim=2)
-        pred = dec_X.squeeze(dim=0).type(torch.int32).item()
-        # Once the end-of-sequence token is predicted, the generation of
-        # the output sequence is complete
-        if pred == vocab['<eos>']:
-            break
-        output_seq.append(pred)
-    return ' '.join(vocab.to_tokens(output_seq))
